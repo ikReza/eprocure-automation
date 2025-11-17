@@ -20,45 +20,49 @@ LOGIC_KEY = os.getenv("LOGIC_KEY")
 
 # --- Authentication Check ---
 def check_password():
-    """Returns `True` if the user provided correct password and logic_key."""
+    """Returns `True` if the user provided correct full password."""
 
     def password_entered():
-        """Checks whether user input is correct."""
+        """Validate entered password."""
+        
         today = datetime.now().strftime("%Y%m%d")
+        expected_password = today + LOGIC_KEY
 
-        entered_password = st.session_state["password"]
-        entered_logic_key = st.session_state["logic_key"]
+        entered_password = st.session_state["password_input"]
 
-        if entered_password == today and entered_logic_key == LOGIC_KEY:
+        if entered_password == expected_password:
             st.session_state["password_correct"] = True
-            del st.session_state["password"]
-            del st.session_state["logic_key"]
+            del st.session_state["password_input"]  # clean up
         else:
             st.session_state["password_correct"] = False
 
-    # First run
+    # First screen
     if "password_correct" not in st.session_state:
-        st.title("🔐 Login Required")
-        st.info("This application requires a password to access.")
+        st.title("🔐 Secure Access")
+        st.info("Please enter your access password to continue.")
 
-        st.text_input("Enter today's password (YYYYMMDD)", type="password", key="password")
-        st.text_input("Enter logic key", type="password", key="logic_key")
+        st.text_input(
+            "Password",
+            type="password",
+            key="password_input"
+        )
         st.button("Login", on_click=password_entered)
-
         return False
 
-    # Wrong password
+    # Incorrect password screen
     elif not st.session_state["password_correct"]:
-        st.title("🔐 Login Required")
-        st.error("😕 Password or logic key incorrect")
+        st.title("🔐 Secure Access")
+        st.error("😕 Incorrect password. Please try again.")
 
-        st.text_input("Enter today's password (YYYYMMDD)", type="password", key="password")
-        st.text_input("Enter logic key", type="password", key="logic_key")
+        st.text_input(
+            "Password",
+            type="password",
+            key="password_input"
+        )
         st.button("Login", on_click=password_entered)
-
         return False
 
-    # Correct password
+    # Correct password → continue
     else:
         return True
 
@@ -94,7 +98,7 @@ if check_password():
     email = st.text_input("Enter your Email")
     password = st.text_input("Enter your Password", type="password")
     tender_id = st.text_input("Enter Tender ID")
-    remark_text = st.text_input("Enter Remark", value="Accepted")
+    remark_text = st.text_input("Enter Remark", value="Accept")
 
     run_button = st.button("Run Automation")
 
