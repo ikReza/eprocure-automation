@@ -18,6 +18,241 @@ load_dotenv()
 # Read secret logic key from environment variable
 LOGIC_KEY = os.getenv("LOGIC_KEY")
 
+# --- Sci-Fi Theme CSS ---
+def apply_scifi_theme():
+    st.markdown("""
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;600;700&display=swap');
+    
+    /* Main background */
+    .stApp {
+        background: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 50%, #0f1628 100%);
+        font-family: 'Rajdhani', sans-serif;
+    }
+    
+    /* Animated background grid */
+    .stApp::before {
+        content: '';
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-image: 
+            linear-gradient(rgba(0, 255, 255, 0.03) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(0, 255, 255, 0.03) 1px, transparent 1px);
+        background-size: 50px 50px;
+        animation: gridMove 20s linear infinite;
+        pointer-events: none;
+        z-index: 0;
+    }
+    
+    @keyframes gridMove {
+        0% { transform: translate(0, 0); }
+        100% { transform: translate(50px, 50px); }
+    }
+    
+    /* Glowing particles */
+    .stApp::after {
+        content: '';
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-image: radial-gradient(circle, rgba(0, 255, 255, 0.1) 1px, transparent 1px);
+        background-size: 100px 100px;
+        animation: particleFloat 30s ease-in-out infinite;
+        pointer-events: none;
+        z-index: 0;
+    }
+    
+    @keyframes particleFloat {
+        0%, 100% { opacity: 0.3; transform: translateY(0); }
+        50% { opacity: 0.6; transform: translateY(-20px); }
+    }
+    
+    /* Headers */
+    h1, h2, h3 {
+        font-family: 'Orbitron', sans-serif !important;
+        color: #00ffff !important;
+        text-transform: uppercase;
+        letter-spacing: 3px;
+        text-shadow: 0 0 10px rgba(0, 255, 255, 0.5),
+                     0 0 20px rgba(0, 255, 255, 0.3),
+                     0 0 30px rgba(0, 255, 255, 0.2);
+        position: relative;
+        z-index: 1;
+    }
+    
+    h1 {
+        font-size: 2.5rem !important;
+        border-bottom: 2px solid #00ffff;
+        padding-bottom: 15px;
+        margin-bottom: 30px;
+        animation: titleGlow 2s ease-in-out infinite;
+    }
+    
+    @keyframes titleGlow {
+        0%, 100% { text-shadow: 0 0 10px rgba(0, 255, 255, 0.5), 0 0 20px rgba(0, 255, 255, 0.3); }
+        50% { text-shadow: 0 0 20px rgba(0, 255, 255, 0.8), 0 0 30px rgba(0, 255, 255, 0.5), 0 0 40px rgba(0, 255, 255, 0.3); }
+    }
+    
+    /* Input fields */
+    .stTextInput > div > div > input {
+        background: rgba(10, 20, 40, 0.6) !important;
+        border: 2px solid #00ffff !important;
+        border-radius: 8px !important;
+        color: #00ffff !important;
+        font-family: 'Rajdhani', sans-serif !important;
+        font-size: 16px !important;
+        padding: 12px !important;
+        box-shadow: inset 0 0 10px rgba(0, 255, 255, 0.2),
+                    0 0 15px rgba(0, 255, 255, 0.1) !important;
+        transition: all 0.3s ease !important;
+    }
+    
+    .stTextInput > div > div > input:focus {
+        border-color: #00ffff !important;
+        box-shadow: inset 0 0 15px rgba(0, 255, 255, 0.3),
+                    0 0 25px rgba(0, 255, 255, 0.4) !important;
+        outline: none !important;
+    }
+    
+    .stTextInput > label {
+        color: #00ffff !important;
+        font-family: 'Orbitron', sans-serif !important;
+        font-weight: 600 !important;
+        text-transform: uppercase;
+        letter-spacing: 2px;
+        font-size: 14px !important;
+    }
+    
+    /* Buttons */
+    .stButton > button {
+        background: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 100%) !important;
+        color: #00ffff !important;
+        border: 2px solid #00ffff !important;
+        border-radius: 8px !important;
+        padding: 15px 40px !important;
+        font-family: 'Orbitron', sans-serif !important;
+        font-weight: 700 !important;
+        font-size: 16px !important;
+        text-transform: uppercase;
+        letter-spacing: 2px;
+        box-shadow: 0 0 20px rgba(0, 255, 255, 0.4),
+                    inset 0 0 10px rgba(0, 255, 255, 0.1) !important;
+        transition: all 0.3s ease !important;
+        cursor: pointer;
+        position: relative;
+        overflow: hidden;
+        text-shadow: 0 0 10px rgba(0, 255, 255, 0.8);
+    }
+    
+    .stButton > button:hover {
+        background: linear-gradient(135deg, #0f1a2e 0%, #1f2f4a 100%) !important;
+        color: #00ffff !important;
+        border-color: #00ffff !important;
+        box-shadow: 0 0 40px rgba(0, 255, 255, 0.8),
+                    inset 0 0 20px rgba(0, 255, 255, 0.2) !important;
+        transform: translateY(-2px);
+        text-shadow: 0 0 15px rgba(0, 255, 255, 1);
+    }
+    
+    .stButton > button:active {
+        transform: translateY(0);
+        box-shadow: 0 0 25px rgba(0, 255, 255, 0.6),
+                    inset 0 0 15px rgba(0, 255, 255, 0.15) !important;
+    }
+    
+    /* Info boxes */
+    .stAlert {
+        background: rgba(0, 255, 255, 0.1) !important;
+        border: 1px solid #00ffff !important;
+        border-left: 4px solid #00ffff !important;
+        border-radius: 8px !important;
+        color: #00ffff !important;
+        font-family: 'Rajdhani', sans-serif !important;
+        box-shadow: 0 0 15px rgba(0, 255, 255, 0.2) !important;
+    }
+    
+    .stSuccess {
+        background: rgba(0, 255, 136, 0.1) !important;
+        border: 1px solid #00ff88 !important;
+        border-left: 4px solid #00ff88 !important;
+        color: #00ff88 !important;
+    }
+    
+    .stWarning {
+        background: rgba(255, 193, 7, 0.1) !important;
+        border: 1px solid #ffc107 !important;
+        border-left: 4px solid #ffc107 !important;
+        color: #ffc107 !important;
+    }
+    
+    .stError {
+        background: rgba(255, 0, 102, 0.1) !important;
+        border: 1px solid #ff0066 !important;
+        border-left: 4px solid #ff0066 !important;
+        color: #ff0066 !important;
+    }
+    
+    /* Progress bar */
+    .stProgress > div > div > div {
+        background: linear-gradient(90deg, #00ffff 0%, #00ff88 100%) !important;
+        box-shadow: 0 0 15px rgba(0, 255, 255, 0.5) !important;
+    }
+    
+    .stProgress > div > div {
+        background: rgba(0, 255, 255, 0.1) !important;
+        border: 1px solid #00ffff !important;
+        border-radius: 10px !important;
+    }
+    
+    /* Markdown text */
+    p, li, .stMarkdown {
+        color: #b0c4de !important;
+        font-family: 'Rajdhani', sans-serif !important;
+        font-size: 16px !important;
+        line-height: 1.6 !important;
+    }
+    
+    /* Copyright */
+    .copyright {
+        position: fixed;
+        bottom: 10px;
+        right: 15px;
+        color: #00ffff;
+        font-size: 12px;
+        font-family: 'Orbitron', sans-serif;
+        z-index: 999;
+        opacity: 0.6;
+        pointer-events: none;
+        text-shadow: 0 0 5px rgba(0, 255, 255, 0.5);
+        letter-spacing: 2px;
+    }
+    
+    /* Subheader styling */
+    .stSubheader {
+        color: #00ff88 !important;
+        font-family: 'Orbitron', sans-serif !important;
+        text-transform: uppercase;
+        letter-spacing: 2px;
+    }
+    
+    /* Sidebar */
+    section[data-testid="stSidebar"] {
+        background: linear-gradient(180deg, #0a0e27 0%, #1a1f3a 100%) !important;
+        border-right: 2px solid #00ffff !important;
+    }
+    
+    /* Hide Streamlit branding */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    </style>
+    """, unsafe_allow_html=True)
+
 # --- Authentication Check ---
 def check_password():
     """Returns `True` if the user provided correct full password."""
@@ -32,37 +267,37 @@ def check_password():
 
         if entered_password == expected_password:
             st.session_state["password_correct"] = True
-            del st.session_state["password_input"]  # clean up
+            del st.session_state["password_input"]
         else:
             st.session_state["password_correct"] = False
 
-    # First screen
     if "password_correct" not in st.session_state:
-        st.title("🔐 Secure Access")
-        st.info("Please enter your access password to continue.")
+        st.title("🔐 SECURE ACCESS")
+        st.info("⚡ ENTER YOUR ACCESS CREDENTIALS TO CONTINUE")
 
         st.text_input(
-            "Password",
+            "PASSWORD",
             type="password",
             key="password_input"
         )
-        st.button("Login", on_click=password_entered)
+        st.button("◉ INITIALIZE LOGIN", on_click=password_entered)
+        st.markdown('</div>', unsafe_allow_html=True)
         return False
 
-    # Incorrect password screen
     elif not st.session_state["password_correct"]:
-        st.title("🔐 Secure Access")
-        st.error("😕 Incorrect password. Please try again.")
+        st.markdown('<div class="login-container">', unsafe_allow_html=True)
+        st.title("🔐 SECURE ACCESS")
+        st.error("⚠️ ACCESS DENIED - INCORRECT CREDENTIALS")
 
         st.text_input(
-            "Password",
+            "PASSWORD",
             type="password",
             key="password_input"
         )
-        st.button("Login", on_click=password_entered)
+        st.button("◉ INITIALIZE LOGIN", on_click=password_entered)
+        st.markdown('</div>', unsafe_allow_html=True)
         return False
 
-    # Correct password → continue
     else:
         return True
 
@@ -70,46 +305,51 @@ def check_password():
 def show_copyright():
     """Displays copyright notice at bottom right"""
     st.markdown("""
-    <style>
-    .copyright {
-        position: fixed;
-        bottom: 10px;
-        right: 15px;
-        color: #d3d3d3;
-        font-size: 12px;
-        font-family: Arial, sans-serif;
-        z-index: 999;
-        opacity: 0.6;
-        pointer-events: none;
-    }
-    </style>
-    <div class="copyright">ⓒ iKaiser</div>
+    <div class="copyright">© iKAISER</div>
     """, unsafe_allow_html=True)
+
+# Apply theme
+apply_scifi_theme()
 
 # --- Main App ---
 if check_password():
-    # --- Streamlit UI ---
-    st.title("E-Procure Tender Automation")
+    st.title("⚡ E-PROCURE TENDER AUTOMATION")
 
     st.markdown("""
-    This tool automates tender evaluation in **eprocure.gov.bd**.
-    """)
+    <div class="main-container">
+    <p style="text-align: center; font-size: 18px;">
+    🚀 AUTOMATED TENDER EVALUATION SYSTEM FOR <strong>eprocure.gov.bd</strong>
+    </p>
+    </div>
+    """, unsafe_allow_html=True)
 
-    email = st.text_input("Enter your Email")
-    password = st.text_input("Enter your Password", type="password")
-    tender_id = st.text_input("Enter Tender ID")
-    remark_text = st.text_input("Enter Remark", value="Accept")
+    # Input fields in a container
+    st.subheader("⚙️ SYSTEM CONFIGURATION")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        email = st.text_input("📧 EMAIL ADDRESS")
+        tender_id = st.text_input("🆔 TENDER ID")
+    
+    with col2:
+        password = st.text_input("🔑 PASSWORD", type="password")
+        remark_text = st.text_input("💬 EVALUATION REMARK", value="Accept")
+    
+    st.markdown('</div>', unsafe_allow_html=True)
 
-    run_button = st.button("Run Automation")
+    # Center the button
+    col1, col2, col3 = st.columns([1, 1, 1])
+    with col2:
+        run_button = st.button("▶ EXECUTE AUTOMATION")
 
     if run_button:
         if not email or not password or not tender_id:
-            st.warning("Please enter all fields!")
+            st.warning("⚠️ ALL FIELDS REQUIRED FOR SYSTEM INITIALIZATION")
         else:
-            st.info("Starting automation... Make sure Chrome is installed.")
+            st.info("🔄 INITIALIZING AUTOMATION SEQUENCE...")
 
             try:
-                # --- Setup Chrome WebDriver ---
                 chrome_options = Options()
                 chrome_options.add_argument("--start-maximized")
                 chrome_options.add_argument("--disable-infobars")
@@ -120,63 +360,52 @@ if check_password():
                 driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
                 wait = WebDriverWait(driver, 10)
 
-                # --- Step 1: Open website ---
                 driver.get("https://www.eprocure.gov.bd")
                 time.sleep(3)
 
-                # --- Step 2: Login ---
                 driver.find_element(By.ID, "txtEmailId").send_keys(email)
                 driver.find_element(By.ID, "txtPassword").send_keys(password)
                 driver.find_element(By.ID, "btnLogin").click()
                 time.sleep(5)
 
-                # --- Step 3: Click "Update Later" if exists ---
                 try:
                     driver.find_element(By.ID, "btnUpdateLater").click()
-                    st.success("✅ Clicked 'Update Later'")
+                    st.success("✅ UPDATE PROMPT BYPASSED")
                 except:
-                    st.info("⚠️ 'Update Later' button not found or skipped")
+                    st.info("⚡ NO UPDATE PROMPT DETECTED")
 
-                # --- Step 4: Hover Tender → My Tender ---
                 actions = ActionChains(driver)
                 tender_tab = driver.find_element(By.ID, "headTabTender")
                 actions.move_to_element(tender_tab).perform()
                 time.sleep(1)
                 driver.find_element(By.XPATH, "//a[@href='/officer/MyTenders.jsp']").click()
-                st.success("✅ Opened 'My Tender'")
+                st.success("✅ MY TENDER MODULE ACCESSED")
 
-                # --- Step 5: Enter Tender ID ---
                 time.sleep(5)
                 tender_input = driver.find_element(By.ID, "tenderId")
                 tender_input.clear()
                 tender_input.send_keys(tender_id)
-                st.success(f"✅ Entered Tender ID: {tender_id}")
+                st.success(f"✅ TENDER ID CONFIGURED: {tender_id}")
 
-                # --- Step 6: Click Processing tab ---
                 driver.find_element(By.ID, "processingTab").click()
                 time.sleep(3)
-                st.success("✅ Clicked Processing tab")
+                st.success("✅ PROCESSING TAB ACTIVATED")
 
-                # --- Step 7: Dashboard ---
                 dashboard_xpath = f"//a[@href='/officer/TenderDashboard.jsp?tenderid={tender_id}']"
                 driver.find_element(By.XPATH, dashboard_xpath).click()
                 time.sleep(3)
-                st.success("✅ Opened Dashboard")
+                st.success("✅ DASHBOARD MODULE LOADED")
 
-                # --- Step 8: Evaluation tab ---
                 driver.find_element(By.XPATH, f"//a[contains(@href,'/officer/EvalComm.jsp?tenderid={tender_id}')]").click()
                 time.sleep(3)
-                st.success("✅ Opened Evaluation tab")
+                st.success("✅ EVALUATION MODULE INITIALIZED")
 
-                # --- Step 9: Clarification tab ---
                 driver.find_element(By.ID, "tbClari").click()
                 time.sleep(3)
-                st.success("✅ Opened Clarification tab")
+                st.success("✅ CLARIFICATION INTERFACE ACTIVE")
 
-                # --- Step 10: Find the correct tenderers table ---
-                st.subheader("🔄 Processing Tenderers")
+                st.subheader("📊 PROCESSING TENDERERS")
                 
-                # Find the specific table with tenderers (the one after "List of Tenderers/Consultants for seeking clarification")
                 tables = driver.find_elements(By.CSS_SELECTOR, "table.tableList_1")
                 target_table = None
                 
@@ -184,7 +413,6 @@ if check_password():
                     try:
                         headers = table.find_elements(By.TAG_NAME, "th")
                         header_text = " ".join([h.text for h in headers])
-                        # Look for the table with "S. No." and "List of Tenderers" headers
                         if "S. No." in header_text and "List of Tenderers" in header_text:
                             target_table = table
                             break
@@ -192,140 +420,121 @@ if check_password():
                         continue
                 
                 if not target_table:
-                    st.error("❌ Could not find the tenderers table!")
+                    st.error("❌ TENDERERS TABLE NOT FOUND IN SYSTEM")
                     raise Exception("Tenderers table not found")
                 
-                # Get all tenderer rows from the specific table
                 tenderer_rows = target_table.find_elements(By.XPATH, ".//tr[td]")
                 total_tenderers = len(tenderer_rows)
-                st.info(f"📊 Found {total_tenderers} tenderers to process")
+                st.info(f"🎯 DETECTED {total_tenderers} TENDERERS FOR PROCESSING")
                 
-                # Create a progress container
                 progress_bar = st.progress(0)
                 status_text = st.empty()
                 
                 successful_tenderers = 0
                 failed_tenderers = 0
                 
-                # --- Loop through each tenderer ---
                 for idx, row in enumerate(tenderer_rows, start=1):
                     try:
-                        # Update progress
                         progress_bar.progress(idx / total_tenderers)
                         
-                        # Get tenderer name for logging
                         try:
                             tenderer_name = row.find_element(By.XPATH, ".//td[2]//a").text.strip()
                         except:
-                            tenderer_name = f"Tenderer #{idx}"
+                            tenderer_name = f"TENDERER #{idx}"
                         
-                        status_text.text(f"Processing: {tenderer_name} ({idx}/{total_tenderers})")
+                        status_text.markdown(f"<h5 style='color: #ff0066;'>⚡ PROCESSING: {tenderer_name} ({idx}/{total_tenderers})</h5>", unsafe_allow_html=True)
                         
-                        # Find and click "View Evaluation Status" link
                         eval_link = row.find_element(By.XPATH, ".//a[contains(@href,'EvalViewStatus.jsp')]")
                         driver.execute_script("arguments[0].scrollIntoView(true);", eval_link)
                         time.sleep(0.5)
                         eval_link.click()
                         time.sleep(3)
                         
-                        st.info(f"✅ [{idx}/{total_tenderers}] Opened evaluation page for: {tenderer_name}")
+                        st.info(f"✅ [{idx}/{total_tenderers}] EVALUATION PAGE LOADED: {tenderer_name}")
                         
-                        # --- Step 11: Find and process all forms for this tenderer ---
                         try:
-                            # Wait for the forms table to load
                             time.sleep(2)
                             
-                            # Find all "Evaluate Form" links on the current page
                             form_links = driver.find_elements(By.XPATH, "//a[contains(text(),'Evaluate Form') or contains(@href,'EvalCriteria.jsp')]")
                             total_forms = len(form_links)
                             
                             if total_forms == 0:
-                                st.warning(f"⚠️ No forms found for {tenderer_name}")
+                                st.warning(f"⚠️ NO FORMS DETECTED FOR {tenderer_name}")
                             else:
-                                st.info(f"📋 Found {total_forms} forms for {tenderer_name}")
+                                st.info(f"📋 PROCESSING {total_forms} FORMS FOR {tenderer_name}")
                                 
                                 forms_processed = 0
                                 
-                                # Process each form
                                 for jdx in range(total_forms):
                                     try:
-                                        # Re-find form links after each navigation back
                                         form_links = driver.find_elements(By.XPATH, "//a[contains(text(),'Evaluate Form') or contains(@href,'EvalCriteria.jsp')]")
                                         
                                         if jdx >= len(form_links):
-                                            st.warning(f"⚠️ Form {jdx+1} not found after page refresh")
+                                            st.warning(f"⚠️ FORM {jdx+1} UNAVAILABLE AFTER REFRESH")
                                             continue
                                         
                                         form_link = form_links[jdx]
                                         
-                                        # Scroll and click
                                         driver.execute_script("arguments[0].scrollIntoView(true);", form_link)
                                         time.sleep(0.5)
                                         form_link.click()
                                         time.sleep(3)
                                         
-                                        st.info(f"   📝 Processing Form {jdx+1}/{total_forms}")
+                                        st.info(f"   🔹 EXECUTING FORM {jdx+1}/{total_forms}")
                                         
-                                        # --- Step 12: Fill the evaluation form ---
                                         try:
-                                            # Click "Accept" radio button
                                             accept_radio = wait.until(EC.element_to_be_clickable((By.ID, "techQualify")))
                                             driver.execute_script("arguments[0].click();", accept_radio)
                                             time.sleep(0.5)
                                             
-                                            # Enter remark
                                             remark_box = driver.find_element(By.ID, "evalNonCompRemarks")
                                             remark_box.clear()
                                             remark_box.send_keys(remark_text)
                                             time.sleep(0.5)
                                             
-                                            # Click Submit button
                                             submit_btn = driver.find_element(By.ID, "btnPost")
                                             driver.execute_script("arguments[0].scrollIntoView(true);", submit_btn)
                                             time.sleep(0.5)
                                             submit_btn.click()
                                             
-                                            # Handle any alerts
                                             try:
                                                 time.sleep(1)
                                                 alert = driver.switch_to.alert
                                                 alert_text = alert.text
                                                 alert.accept()
-                                                st.info(f"   ℹ️ Alert: {alert_text}")
+                                                st.info(f"   ℹ️ SYSTEM ALERT: {alert_text}")
                                             except:
                                                 pass
                                             
                                             time.sleep(2)
-                                            st.success(f"   ✅ Form {jdx+1}/{total_forms} submitted successfully")
+                                            st.success(f"   ✅ FORM {jdx+1}/{total_forms} SUBMITTED SUCCESSFULLY")
                                             forms_processed += 1
                                             
                                         except Exception as form_error:
-                                            st.error(f"   ❌ Error filling form {jdx+1}: {str(form_error)}")
+                                            st.error(f"   ❌ FORM {jdx+1} ERROR: {str(form_error)}")
                                         
-                                        # Navigate back to forms list
                                         driver.back()
                                         time.sleep(2)
                                         
                                     except Exception as form_nav_error:
-                                        st.error(f"   ❌ Error navigating form {jdx+1}: {str(form_nav_error)}")
+                                        st.error(f"   ❌ NAVIGATION ERROR FORM {jdx+1}: {str(form_nav_error)}")
                                         continue
                                 
                                 if forms_processed == total_forms:
-                                    st.success(f"✅ Completed all {forms_processed} forms for {tenderer_name}")
+                                    st.success(f"✅ ALL {forms_processed} FORMS COMPLETED FOR {tenderer_name}")
                                     successful_tenderers += 1
                                 else:
-                                    st.warning(f"⚠️ Completed {forms_processed}/{total_forms} forms for {tenderer_name}")
+                                    st.warning(f"⚠️ COMPLETED {forms_processed}/{total_forms} FORMS FOR {tenderer_name}")
                         
                         except Exception as forms_error:
-                            st.error(f"❌ Error processing forms for {tenderer_name}: {str(forms_error)}")
+                            st.error(f"❌ FORMS PROCESSING ERROR FOR {tenderer_name}: {str(forms_error)}")
                             failed_tenderers += 1
                         
-                        # Navigate back to tenderers list
                         driver.back()
                         time.sleep(3)
                         
                     except Exception as tenderer_error:
-                        st.error(f"❌ Error processing tenderer #{idx}: {str(tenderer_error)}")
+                        st.error(f"❌ TENDERER #{idx} PROCESSING ERROR: {str(tenderer_error)}")
                         failed_tenderers += 1
                         try:
                             driver.back()
@@ -334,31 +543,32 @@ if check_password():
                             pass
                         continue
                 
-                # Final summary
                 progress_bar.progress(1.0)
-                status_text.text("Processing complete!")
+                status_text.markdown("<h5 style='color: #ff0066;'>✅ PROCESSING SEQUENCE COMPLETE</h5>", unsafe_allow_html=True)
                 
-                st.success("🎯 Automation completed!")
-                st.info(f"""
-                **Summary:**
-                - Total Tenderers: {total_tenderers}
-                - Successfully Processed: {successful_tenderers}
-                - Failed: {failed_tenderers}
-                """)
+                st.success("🎯 AUTOMATION SUCCESSFULLY EXECUTED")
+                st.markdown(f"""
+                <div class="main-container">
+                <h3 style="text-align: center;">📊 EXECUTION SUMMARY</h3>
+                <p style="text-align: center; font-size: 18px;">
+                <strong>TOTAL TENDERERS:</strong> {total_tenderers}<br>
+                <strong style="color: #00ff88;">SUCCESSFULLY PROCESSED:</strong> {successful_tenderers}<br>
+                <strong style="color: #ff0066;">FAILED:</strong> {failed_tenderers}
+                </p>
+                </div>
+                """, unsafe_allow_html=True)
 
             except Exception as e:
-                st.error(f"❌ Automation failed: {e}")
+                st.error(f"❌ SYSTEM FAILURE: {e}")
                 import traceback
                 st.error(traceback.format_exc())
             finally:
                 if 'driver' in locals():
-                    st.info("Browser will close in 10 seconds...")
+                    st.info("🔄 BROWSER SHUTDOWN IN 10 SECONDS...")
                     time.sleep(10)
                     driver.quit()
-                    st.info("Browser closed.")
+                    st.info("✅ BROWSER TERMINATED")
     
-    # Show copyright notice at the bottom
     show_copyright()
 else:
-    # Also show copyright on login page
     show_copyright()
