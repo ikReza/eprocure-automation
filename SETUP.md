@@ -2,6 +2,14 @@
 
 This guide sets up a Python 3.13 virtual environment named `automation` with essential packages for web automation and dashboard development using VS Code.
 
+```md
+1. move to the desired location: `cd "python/others/tasks/eprocure-automation`
+
+2. activate environment: `automation\Scripts\activate`
+
+3. run the web app: `streamlit run app.py`
+```
+
 ---
 
 ## 📦 Required Tools

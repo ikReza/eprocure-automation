@@ -6,7 +6,6 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from webdriver_manager.chrome import ChromeDriverManager
 import time
 from datetime import datetime
 import os
@@ -17,6 +16,41 @@ load_dotenv()
 
 # Read secret logic key from environment variable
 LOGIC_KEY = os.getenv("LOGIC_KEY")
+
+# --- Chrome Driver Setup for Streamlit Cloud ---
+def get_chrome_driver():
+    """Initialize Chrome driver compatible with both local and Streamlit Cloud"""
+    chrome_options = Options()
+    
+    # Essential options for Streamlit Cloud
+    chrome_options.add_argument("--headless")
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--disable-gpu")
+    chrome_options.add_argument("--disable-features=NetworkService")
+    chrome_options.add_argument("--window-size=1920x1080")
+    chrome_options.add_argument("--disable-features=VizDisplayCompositor")
+    chrome_options.add_argument("--disable-infobars")
+    chrome_options.add_argument("--disable-extensions")
+    chrome_options.add_argument("--disable-notifications")
+    chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+    chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    chrome_options.add_experimental_option('useAutomationExtension', False)
+    
+    # Check if running on Streamlit Cloud (Linux with chromium installed)
+    if os.path.exists("/usr/bin/chromium"):
+        st.info("🌐 Detected Streamlit Cloud environment")
+        chrome_options.binary_location = "/usr/bin/chromium"
+        service = Service("/usr/bin/chromedriver")
+        driver = webdriver.Chrome(service=service, options=chrome_options)
+    else:
+        # Local development - use webdriver-manager
+        st.info("💻 Detected local environment")
+        from webdriver_manager.chrome import ChromeDriverManager
+        service = Service(ChromeDriverManager().install())
+        driver = webdriver.Chrome(service=service, options=chrome_options)
+    
+    return driver
 
 # --- Sci-Fi Theme CSS ---
 def apply_scifi_theme():
@@ -349,15 +383,10 @@ if check_password():
         else:
             st.info("🔄 INITIALIZING AUTOMATION SEQUENCE...")
 
+            driver = None
             try:
-                chrome_options = Options()
-                chrome_options.add_argument("--start-maximized")
-                chrome_options.add_argument("--disable-infobars")
-                chrome_options.add_argument("--disable-extensions")
-                chrome_options.add_argument("--disable-gpu")
-                chrome_options.add_argument("--disable-notifications")
-                
-                driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
+                # Initialize Chrome driver
+                driver = get_chrome_driver()
                 wait = WebDriverWait(driver, 10)
 
                 driver.get("https://www.eprocure.gov.bd")
@@ -563,7 +592,7 @@ if check_password():
                 import traceback
                 st.error(traceback.format_exc())
             finally:
-                if 'driver' in locals():
+                if driver is not None:
                     st.info("🔄 BROWSER SHUTDOWN IN 10 SECONDS...")
                     time.sleep(10)
                     driver.quit()
