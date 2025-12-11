@@ -48,35 +48,46 @@ def get_chrome_driver():
 def navigate_to_clarification(driver, tender_id):
     """Navigate from current page to Clarification tab"""
     try:
-        # Navigate to My Tenders
+        # Wait for page to be fully loaded
+        wait = WebDriverWait(driver, 15)
+        
+        # Navigate to My Tenders - with explicit wait
+        wait.until(EC.presence_of_element_located((By.ID, "headTabTender")))
         actions = ActionChains(driver)
-        tender_tab = driver.find_element(By.ID, "headTabTender")
+        tender_tab = wait.until(EC.element_to_be_clickable((By.ID, "headTabTender")))
         actions.move_to_element(tender_tab).perform()
-        time.sleep(1)
-        driver.find_element(By.XPATH, "//a[@href='/officer/MyTenders.jsp']").click()
+        time.sleep(2)
+        
+        my_tender_link = wait.until(EC.element_to_be_clickable((By.XPATH, "//a[@href='/officer/MyTenders.jsp']")))
+        my_tender_link.click()
         time.sleep(5)
 
         # Enter tender ID
-        tender_input = driver.find_element(By.ID, "tenderId")
+        tender_input = wait.until(EC.presence_of_element_located((By.ID, "tenderId")))
         tender_input.clear()
         tender_input.send_keys(tender_id)
         time.sleep(1)
 
         # Click Processing Tab
-        driver.find_element(By.ID, "processingTab").click()
+        processing_tab = wait.until(EC.element_to_be_clickable((By.ID, "processingTab")))
+        processing_tab.click()
         time.sleep(3)
 
         # Open Dashboard
         dashboard_xpath = f"//a[@href='/officer/TenderDashboard.jsp?tenderid={tender_id}']"
-        driver.find_element(By.XPATH, dashboard_xpath).click()
+        dashboard_link = wait.until(EC.element_to_be_clickable((By.XPATH, dashboard_xpath)))
+        dashboard_link.click()
         time.sleep(3)
 
         # Open Evaluation Committee
-        driver.find_element(By.XPATH, f"//a[contains(@href,'/officer/EvalComm.jsp?tenderid={tender_id}')]").click()
+        eval_comm_xpath = f"//a[contains(@href,'/officer/EvalComm.jsp?tenderid={tender_id}')]"
+        eval_comm_link = wait.until(EC.element_to_be_clickable((By.XPATH, eval_comm_xpath)))
+        eval_comm_link.click()
         time.sleep(3)
 
         # Click Clarification Tab
-        driver.find_element(By.ID, "tbClari").click()
+        clarification_tab = wait.until(EC.element_to_be_clickable((By.ID, "tbClari")))
+        clarification_tab.click()
         time.sleep(3)
         
         return True
@@ -185,7 +196,22 @@ def process_tenderer_forms(driver, wait, remark_text, tenderer_name):
     
     return forms_processed
 
-def run_automation(email, password, tender_id, remark_text):
+def go_back_to_dashboard(driver, wait):
+    """Click 'Go back to Dashboard' button to return to Clarification page"""
+    try:
+        # Find and click the "Go back to Dashboard" button
+        go_back_button = wait.until(EC.element_to_be_clickable((By.CLASS_NAME, "action-button-goback")))
+        driver.execute_script("arguments[0].scrollIntoView(true);", go_back_button)
+        time.sleep(0.5)
+        go_back_button.click()
+        time.sleep(3)
+        st.success("🔙 RETURNED TO CLARIFICATION DASHBOARD")
+        return True
+    except Exception as e:
+        st.warning(f"⚠️ COULD NOT FIND 'GO BACK TO DASHBOARD' BUTTON: {str(e)}")
+        return False
+
+def run_automation(email, password, tender_id, remark_text, start_from=0):
     """Main automation function"""
     driver = None
     try:
@@ -244,27 +270,61 @@ def run_automation(email, password, tender_id, remark_text):
         
         st.success(f"🎯 DETECTED {total_tenderers} TENDERERS FOR PROCESSING")
         
+        # Apply skip/start_from logic
+        if start_from > 0:
+            if start_from >= total_tenderers:
+                st.error(f"❌ SKIP VALUE ({start_from}) IS GREATER THAN OR EQUAL TO TOTAL TENDERERS ({total_tenderers})")
+                return
+            st.warning(f"⏭️ SKIPPING FIRST {start_from} TENDERERS - STARTING FROM TENDERER #{start_from + 1}")
+        
+        st.info("🚀 OPTIMIZED MODE: Using 'Go back to Dashboard' for faster processing")
+        
         progress_bar = st.progress(0)
         status_text = st.empty()
         
         successful_tenderers = 0
         failed_tenderers = 0
+        skipped_tenderers = start_from
         
-        # Process each tenderer by index
-        for idx in range(total_tenderers):
+        # Process each tenderer by index, starting from start_from
+        for idx in range(start_from, total_tenderers):
             try:
                 current_tenderer_num = idx + 1
-                progress_bar.progress(current_tenderer_num / total_tenderers)
+                progress_bar.progress((idx - start_from + 1) / (total_tenderers - start_from))
                 status_text.markdown(f"<h5 style='color: #ff0066;'>⚡ PROCESSING TENDERER #{current_tenderer_num}/{total_tenderers}</h5>", unsafe_allow_html=True)
                 
-                # Navigate to Clarification page
-                st.info(f"🔄 NAVIGATING TO CLARIFICATION FOR TENDERER #{current_tenderer_num}")
-                if not navigate_to_clarification(driver, tender_id):
-                    st.error(f"❌ FAILED TO NAVIGATE FOR TENDERER #{current_tenderer_num}")
-                    failed_tenderers += 1
-                    continue
-                
-                time.sleep(2)
+                # For the first tenderer (or after skip), we're already on the Clarification page
+                # For subsequent tenderers, use "Go back to Dashboard" button
+                if idx > start_from:
+                    st.info(f"🔙 RETURNING TO CLARIFICATION DASHBOARD...")
+                    
+                    # Try to use "Go back to Dashboard" button first
+                    if not go_back_to_dashboard(driver, wait):
+                        # If button doesn't work, fall back to full navigation
+                        st.warning("⚠️ FALLBACK: USING FULL NAVIGATION")
+                        max_nav_retries = 3
+                        nav_success = False
+                        for nav_attempt in range(max_nav_retries):
+                            if navigate_to_clarification(driver, tender_id):
+                                nav_success = True
+                                break
+                            else:
+                                if nav_attempt < max_nav_retries - 1:
+                                    st.warning(f"⚠️ NAVIGATION ATTEMPT {nav_attempt + 1} FAILED, RETRYING...")
+                                    time.sleep(3)
+                                else:
+                                    st.error(f"❌ NAVIGATION FAILED AFTER {max_nav_retries} ATTEMPTS")
+                        
+                        if not nav_success:
+                            st.error(f"❌ FAILED TO NAVIGATE FOR TENDERER #{current_tenderer_num}")
+                            failed_tenderers += 1
+                            continue
+                    
+                    time.sleep(2)
+                else:
+                    # First tenderer - already on Clarification page from initial navigation
+                    st.info(f"⚡ PROCESSING FIRST TENDERER - ALREADY ON CLARIFICATION PAGE")
+                    time.sleep(1)
                 
                 # Find the tenderers table again
                 tables = driver.find_elements(By.CSS_SELECTOR, "table.tableList_1")
@@ -355,6 +415,7 @@ def run_automation(email, password, tender_id, remark_text):
         <h3 style="text-align: center;">📊 EXECUTION SUMMARY</h3>
         <p style="text-align: center; font-size: 18px;">
         <strong>TOTAL TENDERERS:</strong> {total_tenderers}<br>
+        <strong style="color: #ffc107;">SKIPPED:</strong> {skipped_tenderers}<br>
         <strong style="color: #00ff88;">SUCCESSFULLY PROCESSED:</strong> {successful_tenderers}<br>
         <strong style="color: #ff0066;">FAILED:</strong> {failed_tenderers}
         </p>
