@@ -8,7 +8,6 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import time
 import os
-import re
 
 # --- Chrome Driver Setup ---
 def get_chrome_driver():
@@ -51,7 +50,7 @@ def run_automation(email, password, tender_id, remark_text):
     try:
         # Initialize Chrome driver
         driver = get_chrome_driver()
-        wait = WebDriverWait(driver, 10)
+        wait = WebDriverWait(driver, 15)
 
         driver.get("https://www.eprocure.gov.bd")
         time.sleep(3)
@@ -198,94 +197,96 @@ def run_automation(email, password, tender_id, remark_text):
                 try:
                     time.sleep(2)
                     
-                    # Get the current URL which contains the tenderer ID
-                    current_url = driver.current_url
-                    tenderer_id_match = re.search(r'uId=(\d+)', current_url)
-                    tenderer_id = tenderer_id_match.group(1) if tenderer_id_match else None
+                    # Wait for the forms table to be visible
+                    forms_table = wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, "table.tableList_1")))
                     
-                    if not tenderer_id:
-                        st.error(f"❌ COULD NOT EXTRACT TENDERER ID FOR {tenderer_name}")
-                        failed_tenderers += 1
-                        driver.back()
-                        time.sleep(3)
-                        continue
+                    # Get all form evaluation links at once and store their information
+                    form_links = []
+                    form_rows = forms_table.find_elements(By.XPATH, ".//tr[starts-with(@id, 'fformtr_')]")
                     
-                    # Find all forms and extract their IDs
-                    form_rows = driver.find_elements(By.CSS_SELECTOR, "table.tableList_1 tr[id^='fformtr_']")
-                    total_forms = len(form_rows)
+                    for row in form_rows:
+                        try:
+                            # Get form name
+                            form_name = row.find_element(By.XPATH, ".//td[1]").text.strip()
+                            
+                            # Check if already evaluated
+                            status_cell = row.find_element(By.XPATH, ".//td[2]")
+                            status_text = status_cell.text.strip().lower()
+                            is_evaluated = "accepted" in status_text or "evaluated" in status_text
+                            
+                            # Get evaluation link if not already evaluated
+                            eval_link = None
+                            if not is_evaluated:
+                                try:
+                                    eval_link = row.find_element(By.XPATH, ".//a[contains(text(),'Evaluate Form')]")
+                                except:
+                                    pass
+                            
+                            form_links.append({
+                                'name': form_name,
+                                'is_evaluated': is_evaluated,
+                                'element': eval_link
+                            })
+                        except:
+                            continue
+                    
+                    total_forms = len(form_links)
+                    forms_to_process = sum(1 for link in form_links if not link['is_evaluated'])
                     
                     if total_forms == 0:
                         st.warning(f"⚠️ NO FORMS DETECTED FOR {tenderer_name}")
                     else:
-                        st.info(f"📋 PROCESSING {total_forms} FORMS FOR {tenderer_name}")
+                        st.info(f"📋 FOUND {total_forms} FORMS FOR {tenderer_name} ({forms_to_process} TO EVALUATE)")
                         
                         forms_processed = 0
                         
-                        for jdx in range(total_forms):
+                        for jdx, form_info in enumerate(form_links):
+                            if form_info['is_evaluated']:
+                                st.info(f"   ✅ FORM {jdx+1}/{total_forms} ({form_info['name']}) ALREADY EVALUATED")
+                                forms_processed += 1
+                                continue
+                            
+                            if not form_info['element']:
+                                st.warning(f"   ⚠️ NO EVALUATION LINK FOR FORM {jdx+1}/{total_forms} ({form_info['name']})")
+                                continue
+                            
+                            st.info(f"   🔹 EXECUTING FORM {jdx+1}/{total_forms} ({form_info['name']})")
+                            
+                            # Store current URL for navigation back
+                            current_url = driver.current_url
+                            
                             try:
-                                # Re-find form rows to avoid stale elements
-                                form_rows = driver.find_elements(By.CSS_SELECTOR, "table.tableList_1 tr[id^='fformtr_']")
+                                # Click the evaluation link
+                                eval_link = form_info['element']
+                                driver.execute_script("arguments[0].scrollIntoView(true);", eval_link)
+                                time.sleep(0.5)
+                                eval_link.click()
                                 
-                                if jdx >= len(form_rows):
-                                    st.warning(f"⚠️ FORM {jdx+1} UNAVAILABLE AFTER REFRESH")
-                                    continue
-                                
-                                form_row = form_rows[jdx]
-                                form_id_match = re.search(r'fformtr_(\d+)', form_row.get_attribute("id"))
-                                form_id = form_id_match.group(1) if form_id_match else None
-                                
-                                if not form_id:
-                                    st.warning(f"⚠️ COULD NOT EXTRACT FORM ID FOR FORM {jdx+1}")
-                                    continue
-                                
-                                # Check if the form is already evaluated
-                                try:
-                                    status_cell = form_row.find_element(By.XPATH, ".//td[2]")
-                                    status_text = status_cell.text.strip().lower()
-                                    
-                                    if "accepted" in status_text or "evaluated" in status_text:
-                                        st.info(f"   ✅ FORM {jdx+1}/{total_forms} ALREADY EVALUATED")
-                                        forms_processed += 1
-                                        continue
-                                except:
-                                    pass
-                                
-                                # Find the evaluate link
-                                try:
-                                    eval_link = form_row.find_element(By.XPATH, ".//a[contains(text(),'Evaluate Form')]")
-                                except:
-                                    st.warning(f"   ⚠️ NO EVALUATION LINK FOR FORM {jdx+1}/{total_forms}")
-                                    continue
-                                
-                                # Get the form URL directly
-                                form_url = eval_link.get_attribute("href")
-                                if not form_url:
-                                    st.warning(f"   ⚠️ COULD NOT GET FORM URL FOR FORM {jdx+1}/{total_forms}")
-                                    continue
-                                
-                                st.info(f"   🔹 EXECUTING FORM {jdx+1}/{total_forms}")
-                                
-                                # Navigate directly to the form evaluation page
-                                driver.get(form_url)
-                                time.sleep(3)
+                                # Wait for the form page to load
+                                wait.until(EC.url_contains("EvalCriteria.jsp"))
+                                time.sleep(2)
                                 
                                 try:
+                                    # Find and click the accept radio button
                                     accept_radio = wait.until(EC.element_to_be_clickable((By.ID, "techQualify")))
                                     driver.execute_script("arguments[0].click();", accept_radio)
                                     time.sleep(0.5)
                                     
+                                    # Fill in the remark
                                     remark_box = driver.find_element(By.ID, "evalNonCompRemarks")
                                     remark_box.clear()
                                     remark_box.send_keys(remark_text)
                                     time.sleep(0.5)
                                     
+                                    # Submit the form
                                     submit_btn = driver.find_element(By.ID, "btnPost")
                                     driver.execute_script("arguments[0].scrollIntoView(true);", submit_btn)
                                     time.sleep(0.5)
                                     submit_btn.click()
                                     
+                                    # Handle any alerts
                                     try:
-                                        time.sleep(1)
+                                        WebDriverWait(driver, 2).until(EC.alert_is_present())
                                         alert = driver.switch_to.alert
                                         alert_text = alert.text
                                         alert.accept()
@@ -300,7 +301,7 @@ def run_automation(email, password, tender_id, remark_text):
                                 except Exception as form_error:
                                     st.error(f"   ❌ FORM {jdx+1} ERROR: {str(form_error)}")
                                 
-                                # Navigate back to the forms list page using the stored URL
+                                # Navigate back to the forms list using the stored URL
                                 driver.get(current_url)
                                 time.sleep(3)
                                 
