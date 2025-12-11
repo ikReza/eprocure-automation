@@ -193,96 +193,80 @@ def run_automation(email, password, tender_id, remark_text):
                     failed_tenderers += 1
                     continue
                 
-                # Process forms - ORIGINAL APPROACH WITH MINIMAL CHANGES
+                # Process forms - REVISED LOGIC
                 try:
                     time.sleep(2)
                     
-                    # Get all form evaluation links
-                    form_links = driver.find_elements(By.XPATH, "//a[contains(text(),'Evaluate Form') or contains(@href,'EvalCriteria.jsp')]")
-                    total_forms = len(form_links)
-                    
-                    if total_forms == 0:
-                        st.warning(f"⚠️ NO FORMS DETECTED FOR {tenderer_name}")
-                    else:
-                        st.info(f"📋 PROCESSING {total_forms} FORMS FOR {tenderer_name}")
-                        
-                        forms_processed = 0
-                        
-                        for jdx in range(total_forms):
+                    # Loop to process all pending forms for this tenderer
+                    forms_processed_for_tenderer = 0
+                    while True:
+                        try:
+                            # Find the next form to evaluate
+                            # We look for a row with "Pending" status and an "Evaluate Form" link
+                            form_row = driver.find_element(By.XPATH, "//table[contains(@class,'tableList_1')]//tr[td[contains(text(),'Pending')]]//ancestor::tr[contains(@id,'fformtr_')]")
+                            
+                            # Find the "Evaluate Form" link within that row
+                            eval_form_link = form_row.find_element(By.XPATH, ".//a[contains(text(),'Evaluate Form')]")
+                            
+                            # Click the link to open the form
+                            driver.execute_script("arguments[0].scrollIntoView(true);", eval_form_link)
+                            time.sleep(0.5)
+                            eval_form_link.click()
+                            time.sleep(3)
+                            
+                            forms_processed_for_tenderer += 1
+                            st.info(f"   🔹 EXECUTING FORM #{forms_processed_for_tenderer}")
+                            
+                            # Fill out and submit the form
+                            accept_radio = wait.until(EC.element_to_be_clickable((By.ID, "techQualify")))
+                            driver.execute_script("arguments[0].click();", accept_radio)
+                            time.sleep(0.5)
+                            
+                            remark_box = driver.find_element(By.ID, "evalNonCompRemarks")
+                            remark_box.clear()
+                            remark_box.send_keys(remark_text)
+                            time.sleep(0.5)
+                            
+                            submit_btn = driver.find_element(By.ID, "btnPost")
+                            driver.execute_script("arguments[0].scrollIntoView(true);", submit_btn)
+                            time.sleep(0.5)
+                            submit_btn.click()
+                            
+                            # Handle any alerts
                             try:
-                                # Store the current URL before clicking the form link
-                                current_url = driver.current_url
-                                
-                                # Re-find form links to avoid stale element references
-                                form_links = driver.find_elements(By.XPATH, "//a[contains(text(),'Evaluate Form') or contains(@href,'EvalCriteria.jsp')]")
-                                
-                                if jdx >= len(form_links):
-                                    st.warning(f"⚠️ FORM {jdx+1} UNAVAILABLE AFTER REFRESH")
-                                    continue
-                                
-                                form_link = form_links[jdx]
-                                
-                                driver.execute_script("arguments[0].scrollIntoView(true);", form_link)
-                                time.sleep(0.5)
-                                form_link.click()
-                                time.sleep(3)
-                                
-                                st.info(f"   🔹 EXECUTING FORM {jdx+1}/{total_forms}")
-                                
-                                try:
-                                    accept_radio = wait.until(EC.element_to_be_clickable((By.ID, "techQualify")))
-                                    driver.execute_script("arguments[0].click();", accept_radio)
-                                    time.sleep(0.5)
-                                    
-                                    remark_box = driver.find_element(By.ID, "evalNonCompRemarks")
-                                    remark_box.clear()
-                                    remark_box.send_keys(remark_text)
-                                    time.sleep(0.5)
-                                    
-                                    submit_btn = driver.find_element(By.ID, "btnPost")
-                                    driver.execute_script("arguments[0].scrollIntoView(true);", submit_btn)
-                                    time.sleep(0.5)
-                                    submit_btn.click()
-                                    
-                                    try:
-                                        time.sleep(1)
-                                        alert = driver.switch_to.alert
-                                        alert_text = alert.text
-                                        alert.accept()
-                                        st.info(f"   ℹ️ SYSTEM ALERT: {alert_text}")
-                                    except:
-                                        pass
-                                    
-                                    time.sleep(2)
-                                    st.success(f"   ✅ FORM {jdx+1}/{total_forms} SUBMITTED SUCCESSFULLY")
-                                    forms_processed += 1
-                                    
-                                except Exception as form_error:
-                                    st.error(f"   ❌ FORM {jdx+1} ERROR: {str(form_error)}")
-                                
-                                # Use the stored URL to navigate back instead of driver.back()
-                                driver.get(current_url)
-                                time.sleep(3)
-                                
-                            except Exception as form_nav_error:
-                                st.error(f"   ❌ NAVIGATION ERROR FORM {jdx+1}: {str(form_nav_error)}")
-                                continue
-                        
-                        if forms_processed == total_forms:
-                            st.success(f"✅ ALL {forms_processed} FORMS COMPLETED FOR {tenderer_name}")
-                            successful_tenderers += 1
-                        else:
-                            st.warning(f"⚠️ COMPLETED {forms_processed}/{total_forms} FORMS FOR {tenderer_name}")
-                            if forms_processed > 0:
-                                successful_tenderers += 1
+                                WebDriverWait(driver, 2).until(EC.alert_is_present())
+                                alert = driver.switch_to.alert
+                                alert_text = alert.text
+                                alert.accept()
+                                st.info(f"   ℹ️ SYSTEM ALERT: {alert_text}")
+                            except:
+                                pass
+                            
+                            st.success(f"   ✅ FORM #{forms_processed_for_tenderer} SUBMITTED SUCCESSFULLY")
+                            
+                            # CRITICAL: Wait for the page to automatically navigate back
+                            time.sleep(3)
+                            
+                        except Exception as inner_error:
+                            # If we can't find another "Pending" form, we're done with this tenderer
+                            if "no such element" in str(inner_error).lower():
+                                st.info(f"✅ ALL PENDING FORMS PROCESSED FOR {tenderer_name}. Total: {forms_processed_for_tenderer}")
+                                break
                             else:
-                                failed_tenderers += 1
+                                st.error(f"   ❌ AN ERROR OCCURRED: {str(inner_error)}")
+                                break
+                    
+                    if forms_processed_for_tenderer > 0:
+                        successful_tenderers += 1
+                    else:
+                        st.warning(f"⚠️ NO PENDING FORMS FOUND FOR {tenderer_name}")
+                        successful_tenderers += 1 # Count as success since nothing to do
                 
                 except Exception as forms_error:
                     st.error(f"❌ FORMS PROCESSING ERROR FOR {tenderer_name}: {str(forms_error)}")
                     failed_tenderers += 1
                 
-                # Navigate back to the tenderers list
+                # Navigate back to the main tenderers list
                 driver.back()
                 time.sleep(3)
                 
