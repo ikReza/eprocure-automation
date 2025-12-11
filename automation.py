@@ -85,78 +85,99 @@ def navigate_to_clarification(driver, tender_id):
         return False
 
 def process_tenderer_forms(driver, wait, remark_text, tenderer_name):
-    """Process all forms for a specific tenderer"""
+    """Process all forms for a specific tenderer that have 'Evaluate Form' action"""
     forms_processed = 0
+    forms_skipped = 0
     
     try:
         time.sleep(3)
         
-        # Loop to process all pending forms for this tenderer
+        # Loop to process all pending forms
         while True:
             try:
-                # Find all pending forms
-                pending_forms = driver.find_elements(By.XPATH, "//table[contains(@class,'tableList_1')]//tr[contains(@id,'fformtr_') and .//td[contains(text(),'Pending')]]")
+                # Find all form rows in the table
+                form_rows = driver.find_elements(By.XPATH, "//table[contains(@class,'tableList_1')]//tr[contains(@id,'fformtr_')]")
                 
-                if not pending_forms:
-                    if forms_processed > 0:
-                        st.info(f"✅ ALL PENDING FORMS PROCESSED FOR {tenderer_name}. Total: {forms_processed}")
-                    else:
-                        st.warning(f"⚠️ NO PENDING FORMS FOUND FOR {tenderer_name}")
+                if not form_rows:
+                    st.warning(f"⚠️ NO FORM ROWS FOUND FOR {tenderer_name}")
                     break
                 
-                # Get the first pending form
-                form_row = pending_forms[0]
+                # Find a form that needs evaluation (has "Evaluate Form" link)
+                found_pending = False
+                for form_row in form_rows:
+                    try:
+                        action_cell = form_row.find_element(By.XPATH, ".//td[3]")  # Action column
+                        action_text = action_cell.text.strip()
+                        
+                        # Check if this form has "Evaluate Form" link
+                        if "Evaluate Form" in action_text:
+                            # This form needs evaluation
+                            eval_form_link = action_cell.find_element(By.XPATH, ".//a[contains(text(),'Evaluate Form')]")
+                            
+                            # Get form name for logging
+                            try:
+                                form_name = form_row.find_element(By.XPATH, ".//td[1]//a").text.strip()
+                            except:
+                                form_name = "FORM"
+                            
+                            # Click the evaluate form link
+                            driver.execute_script("arguments[0].scrollIntoView(true);", eval_form_link)
+                            time.sleep(0.5)
+                            eval_form_link.click()
+                            time.sleep(3)
+                            
+                            forms_processed += 1
+                            st.info(f"   🔹 EXECUTING FORM: {form_name}")
+                            
+                            # Fill out and submit the form
+                            accept_radio = wait.until(EC.element_to_be_clickable((By.ID, "techQualify")))
+                            driver.execute_script("arguments[0].click();", accept_radio)
+                            time.sleep(0.5)
+                            
+                            remark_box = driver.find_element(By.ID, "evalNonCompRemarks")
+                            remark_box.clear()
+                            remark_box.send_keys(remark_text)
+                            time.sleep(0.5)
+                            
+                            submit_btn = driver.find_element(By.ID, "btnPost")
+                            driver.execute_script("arguments[0].scrollIntoView(true);", submit_btn)
+                            time.sleep(0.5)
+                            submit_btn.click()
+                            
+                            # Handle any alerts
+                            try:
+                                WebDriverWait(driver, 2).until(EC.alert_is_present())
+                                alert = driver.switch_to.alert
+                                alert_text = alert.text
+                                alert.accept()
+                                st.info(f"   ℹ️ SYSTEM ALERT: {alert_text}")
+                            except:
+                                pass
+                            
+                            st.success(f"   ✅ FORM SUBMITTED: {form_name}")
+                            
+                            # Wait for the page to automatically navigate back
+                            time.sleep(3)
+                            
+                            found_pending = True
+                            break  # Exit inner loop to re-check forms
+                            
+                        elif "Form Evaluated" in action_text:
+                            # This form is already evaluated, skip it
+                            forms_skipped += 1
+                    except:
+                        continue
                 
-                # Find the "Evaluate Form" link within that row
-                eval_form_link = form_row.find_element(By.XPATH, ".//a[contains(text(),'Evaluate Form')]")
-                
-                # Click the link to open the form
-                driver.execute_script("arguments[0].scrollIntoView(true);", eval_form_link)
-                time.sleep(0.5)
-                eval_form_link.click()
-                time.sleep(3)
-                
-                forms_processed += 1
-                st.info(f"   🔹 EXECUTING FORM #{forms_processed}")
-                
-                # Fill out and submit the form
-                accept_radio = wait.until(EC.element_to_be_clickable((By.ID, "techQualify")))
-                driver.execute_script("arguments[0].click();", accept_radio)
-                time.sleep(0.5)
-                
-                remark_box = driver.find_element(By.ID, "evalNonCompRemarks")
-                remark_box.clear()
-                remark_box.send_keys(remark_text)
-                time.sleep(0.5)
-                
-                submit_btn = driver.find_element(By.ID, "btnPost")
-                driver.execute_script("arguments[0].scrollIntoView(true);", submit_btn)
-                time.sleep(0.5)
-                submit_btn.click()
-                
-                # Handle any alerts
-                try:
-                    WebDriverWait(driver, 2).until(EC.alert_is_present())
-                    alert = driver.switch_to.alert
-                    alert_text = alert.text
-                    alert.accept()
-                    st.info(f"   ℹ️ SYSTEM ALERT: {alert_text}")
-                except:
-                    pass
-                
-                st.success(f"   ✅ FORM #{forms_processed} SUBMITTED SUCCESSFULLY")
-                
-                # Wait for the page to automatically navigate back
-                time.sleep(3)
-                
-            except (NoSuchElementException, TimeoutException):
-                if forms_processed > 0:
-                    st.info(f"✅ ALL PENDING FORMS PROCESSED FOR {tenderer_name}. Total: {forms_processed}")
-                else:
-                    st.warning(f"⚠️ NO PENDING FORMS FOUND FOR {tenderer_name}")
-                break
+                # If no pending forms found, we're done
+                if not found_pending:
+                    if forms_processed > 0:
+                        st.info(f"✅ ALL PENDING FORMS PROCESSED FOR {tenderer_name}. Processed: {forms_processed}, Already Evaluated: {forms_skipped}")
+                    else:
+                        st.info(f"ℹ️ NO PENDING FORMS FOR {tenderer_name}. All {forms_skipped} forms already evaluated.")
+                    break
+                    
             except Exception as inner_error:
-                st.error(f"   ❌ FORM PROCESSING ERROR: {str(inner_error)}")
+                st.error(f"   ❌ ERROR IN FORM PROCESSING LOOP: {str(inner_error)}")
                 break
     
     except Exception as e:
@@ -188,13 +209,13 @@ def run_automation(email, password, tender_id, remark_text):
         except:
             st.info("⚡ NO UPDATE PROMPT DETECTED")
 
-        # INITIAL NAVIGATION: Navigate to Clarification tab to get tenderer list
+        # INITIAL NAVIGATION: Navigate to Clarification tab to get tenderer count
         st.info("🔄 INITIAL NAVIGATION TO CLARIFICATION PAGE...")
         if not navigate_to_clarification(driver, tender_id):
             raise Exception("Failed to navigate to Clarification page")
         
         st.success("✅ CLARIFICATION INTERFACE ACTIVE")
-        st.subheader("📊 EXTRACTING TENDERER LIST")
+        st.subheader("📊 DETECTING TENDERERS")
         
         # Find the tenderers table
         tables = driver.find_elements(By.CSS_SELECTOR, "table.tableList_1")
@@ -209,7 +230,6 @@ def run_automation(email, password, tender_id, remark_text):
                     "List of Tenderers" in header_texts and 
                     "Action" in header_texts):
                     target_table = table
-                    st.info(f"✅ FOUND TARGET TABLE WITH HEADERS: {header_texts}")
                     break
             except:
                 continue
@@ -218,19 +238,9 @@ def run_automation(email, password, tender_id, remark_text):
             st.error("❌ TENDERERS TABLE NOT FOUND IN SYSTEM")
             raise Exception("Tenderers table not found")
         
-        # Extract all tenderer names (2nd column)
+        # Get total count of tenderers
         tenderer_rows = target_table.find_elements(By.XPATH, ".//tr[position()>1 and td]")
         total_tenderers = len(tenderer_rows)
-        
-        tenderer_names = []
-        for idx, row in enumerate(tenderer_rows):
-            try:
-                tenderer_name = row.find_element(By.XPATH, ".//td[2]").text.strip()
-                tenderer_names.append(tenderer_name)
-                st.info(f"📋 Tenderer #{idx+1}: {tenderer_name}")
-            except Exception as e:
-                tenderer_names.append(f"TENDERER #{idx+1}")
-                st.warning(f"⚠️ Could not extract name for tenderer #{idx+1}: {str(e)}")
         
         st.success(f"🎯 DETECTED {total_tenderers} TENDERERS FOR PROCESSING")
         
@@ -240,16 +250,17 @@ def run_automation(email, password, tender_id, remark_text):
         successful_tenderers = 0
         failed_tenderers = 0
         
-        # Process each tenderer
-        for idx, tenderer_name in enumerate(tenderer_names):
+        # Process each tenderer by index
+        for idx in range(total_tenderers):
             try:
-                progress_bar.progress((idx + 1) / total_tenderers)
-                status_text.markdown(f"<h5 style='color: #ff0066;'>⚡ PROCESSING: {tenderer_name} ({idx+1}/{total_tenderers})</h5>", unsafe_allow_html=True)
+                current_tenderer_num = idx + 1
+                progress_bar.progress(current_tenderer_num / total_tenderers)
+                status_text.markdown(f"<h5 style='color: #ff0066;'>⚡ PROCESSING TENDERER #{current_tenderer_num}/{total_tenderers}</h5>", unsafe_allow_html=True)
                 
                 # Navigate to Clarification page
-                st.info(f"🔄 NAVIGATING TO CLARIFICATION FOR: {tenderer_name}")
+                st.info(f"🔄 NAVIGATING TO CLARIFICATION FOR TENDERER #{current_tenderer_num}")
                 if not navigate_to_clarification(driver, tender_id):
-                    st.error(f"❌ FAILED TO NAVIGATE FOR {tenderer_name}")
+                    st.error(f"❌ FAILED TO NAVIGATE FOR TENDERER #{current_tenderer_num}")
                     failed_tenderers += 1
                     continue
                 
@@ -270,52 +281,68 @@ def run_automation(email, password, tender_id, remark_text):
                         continue
                 
                 if not target_table:
-                    st.error(f"❌ COULD NOT FIND TENDERERS TABLE FOR {tenderer_name}")
+                    st.error(f"❌ COULD NOT FIND TENDERERS TABLE FOR TENDERER #{current_tenderer_num}")
                     failed_tenderers += 1
                     continue
                 
-                # Find the specific tenderer row by matching name
+                # Get the specific tenderer row by index
                 tenderer_rows = target_table.find_elements(By.XPATH, ".//tr[position()>1 and td]")
-                target_row = None
                 
-                for row in tenderer_rows:
-                    try:
-                        row_name = row.find_element(By.XPATH, ".//td[2]").text.strip()
-                        if row_name == tenderer_name:
-                            target_row = row
-                            break
-                    except:
-                        continue
-                
-                if not target_row:
-                    st.error(f"❌ COULD NOT FIND ROW FOR {tenderer_name}")
+                if idx >= len(tenderer_rows):
+                    st.error(f"❌ TENDERER #{current_tenderer_num} NOT FOUND IN TABLE")
                     failed_tenderers += 1
                     continue
                 
-                # Click "Evaluate Tenderer" link
+                target_row = tenderer_rows[idx]
+                
+                # Get tenderer name for logging
                 try:
-                    eval_link = target_row.find_element(By.XPATH, ".//td[4]//a[contains(text(),'Evaluate Tenderer')]")
-                    driver.execute_script("arguments[0].scrollIntoView(true);", eval_link)
-                    time.sleep(0.5)
-                    eval_link.click()
-                    time.sleep(4)
+                    tenderer_name = target_row.find_element(By.XPATH, ".//td[2]").text.strip()
+                except:
+                    tenderer_name = f"TENDERER #{current_tenderer_num}"
+                
+                st.info(f"📋 Processing: {tenderer_name}")
+                
+                # Check Action column (4th column) - look for "Evaluate Tenderer" or "Edit"
+                try:
+                    action_cell = target_row.find_element(By.XPATH, ".//td[4]")
                     
-                    st.info(f"✅ [{idx+1}/{total_tenderers}] EVALUATION PAGE LOADED: {tenderer_name}")
+                    # Try to find "Evaluate Tenderer" link first
+                    try:
+                        eval_link = action_cell.find_element(By.XPATH, ".//a[contains(text(),'Evaluate Tenderer')]")
+                        st.info(f"✅ FOUND 'EVALUATE TENDERER' LINK FOR {tenderer_name}")
+                        driver.execute_script("arguments[0].scrollIntoView(true);", eval_link)
+                        time.sleep(0.5)
+                        eval_link.click()
+                        time.sleep(4)
+                        st.info(f"✅ EVALUATION PAGE LOADED: {tenderer_name}")
+                    except:
+                        # If "Evaluate Tenderer" not found, look for "Edit" link
+                        try:
+                            edit_link = action_cell.find_element(By.XPATH, ".//a[contains(text(),'Edit')]")
+                            st.info(f"✅ FOUND 'EDIT' LINK FOR {tenderer_name} (Already Evaluated)")
+                            driver.execute_script("arguments[0].scrollIntoView(true);", edit_link)
+                            time.sleep(0.5)
+                            edit_link.click()
+                            time.sleep(4)
+                            st.info(f"✅ EDIT PAGE LOADED: {tenderer_name}")
+                        except:
+                            st.error(f"❌ NO 'EVALUATE TENDERER' OR 'EDIT' LINK FOUND FOR {tenderer_name}")
+                            failed_tenderers += 1
+                            continue
+                    
                 except Exception as link_error:
-                    st.warning(f"⚠️ NO 'EVALUATE TENDERER' LINK FOR {tenderer_name}: {str(link_error)}")
+                    st.error(f"❌ ERROR ACCESSING ACTION CELL FOR {tenderer_name}: {str(link_error)}")
                     failed_tenderers += 1
                     continue
                 
                 # Process all forms for this tenderer
                 forms_count = process_tenderer_forms(driver, wait, remark_text, tenderer_name)
                 
-                if forms_count >= 0:  # Count as success even if no forms
-                    successful_tenderers += 1
-                else:
-                    failed_tenderers += 1
+                successful_tenderers += 1
                 
             except Exception as tenderer_error:
-                st.error(f"❌ ERROR PROCESSING {tenderer_name}: {str(tenderer_error)}")
+                st.error(f"❌ ERROR PROCESSING TENDERER #{current_tenderer_num}: {str(tenderer_error)}")
                 failed_tenderers += 1
                 continue
         
