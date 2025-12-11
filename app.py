@@ -26,10 +26,19 @@ if check_password():
     with col1:
         email = st.text_input("📧 EMAIL ADDRESS")
         tender_id = st.text_input("🆔 TENDER ID")
+        remark_text = st.text_input("💬 EVALUATION REMARK", value="Accept")
     
     with col2:
         password = st.text_input("🔑 PASSWORD", type="password")
-        remark_text = st.text_input("💬 EVALUATION REMARK", value="Accept")
+        skip_first = st.number_input(
+            "⏭️ SKIP FIRST N TENDERERS", 
+            min_value=0, 
+            value=0, 
+            step=1,
+            help="If you've already processed some tenderers, enter the number to skip. Example: Enter 20 to start from tenderer #21."
+        )
+
+    st.info("💡 **TIP:** If automation fails or stops, note the last processed tenderer number, then restart and use 'Skip First N Tenderers' to resume from where you left off.")
 
     # Center the button
     col1, col2, col3 = st.columns([1, 1, 1])
@@ -41,7 +50,7 @@ if check_password():
             st.warning("⚠️ ALL FIELDS REQUIRED FOR SYSTEM INITIALIZATION")
         else:
             st.info("🔄 INITIALIZING AUTOMATION SEQUENCE...")
-            run_automation(email, password, tender_id, remark_text)
+            run_automation(email, password, tender_id, remark_text, start_from=skip_first)
     
     show_copyright()
 else:
