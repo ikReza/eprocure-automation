@@ -45,18 +45,67 @@ def get_chrome_driver():
     
     return driver
 
+def navigate_to_clarification(driver, tender_id):
+    """Navigate from current page to Clarification tab"""
+    try:
+        # Navigate to My Tenders
+        actions = ActionChains(driver)
+        tender_tab = driver.find_element(By.ID, "headTabTender")
+        actions.move_to_element(tender_tab).perform()
+        time.sleep(1)
+        driver.find_element(By.XPATH, "//a[@href='/officer/MyTenders.jsp']").click()
+        time.sleep(5)
+
+        # Enter tender ID
+        tender_input = driver.find_element(By.ID, "tenderId")
+        tender_input.clear()
+        tender_input.send_keys(tender_id)
+        time.sleep(1)
+
+        # Click Processing Tab
+        driver.find_element(By.ID, "processingTab").click()
+        time.sleep(3)
+
+        # Open Dashboard
+        dashboard_xpath = f"//a[@href='/officer/TenderDashboard.jsp?tenderid={tender_id}']"
+        driver.find_element(By.XPATH, dashboard_xpath).click()
+        time.sleep(3)
+
+        # Open Evaluation Committee
+        driver.find_element(By.XPATH, f"//a[contains(@href,'/officer/EvalComm.jsp?tenderid={tender_id}')]").click()
+        time.sleep(3)
+
+        # Click Clarification Tab
+        driver.find_element(By.ID, "tbClari").click()
+        time.sleep(3)
+        
+        return True
+    except Exception as e:
+        st.error(f"❌ NAVIGATION ERROR: {str(e)}")
+        return False
+
 def process_tenderer_forms(driver, wait, remark_text, tenderer_name):
     """Process all forms for a specific tenderer"""
     forms_processed = 0
     
     try:
-        time.sleep(2)
+        time.sleep(3)
         
         # Loop to process all pending forms for this tenderer
         while True:
             try:
-                # Find the next form to evaluate
-                form_row = driver.find_element(By.XPATH, "//table[contains(@class,'tableList_1')]//tr[td[contains(text(),'Pending')]]//ancestor::tr[contains(@id,'fformtr_')]")
+                # Find all pending forms
+                pending_forms = driver.find_elements(By.XPATH, "//table[contains(@class,'tableList_1')]//tr[contains(@id,'fformtr_') and .//td[contains(text(),'Pending')]]")
+                
+                if not pending_forms:
+                    if forms_processed > 0:
+                        st.info(f"✅ ALL PENDING FORMS PROCESSED FOR {tenderer_name}. Total: {forms_processed}")
+                    else:
+                        st.warning(f"⚠️ NO PENDING FORMS FOUND FOR {tenderer_name}")
+                    break
+                
+                # Get the first pending form
+                form_row = pending_forms[0]
                 
                 # Find the "Evaluate Form" link within that row
                 eval_form_link = form_row.find_element(By.XPATH, ".//a[contains(text(),'Evaluate Form')]")
@@ -101,7 +150,6 @@ def process_tenderer_forms(driver, wait, remark_text, tenderer_name):
                 time.sleep(3)
                 
             except (NoSuchElementException, TimeoutException):
-                # If we can't find another "Pending" form, we're done
                 if forms_processed > 0:
                     st.info(f"✅ ALL PENDING FORMS PROCESSED FOR {tenderer_name}. Total: {forms_processed}")
                 else:
@@ -140,42 +188,13 @@ def run_automation(email, password, tender_id, remark_text):
         except:
             st.info("⚡ NO UPDATE PROMPT DETECTED")
 
-        # Navigate to My Tenders
-        actions = ActionChains(driver)
-        tender_tab = driver.find_element(By.ID, "headTabTender")
-        actions.move_to_element(tender_tab).perform()
-        time.sleep(1)
-        driver.find_element(By.XPATH, "//a[@href='/officer/MyTenders.jsp']").click()
-        st.success("✅ MY TENDER MODULE ACCESSED")
-
-        time.sleep(5)
-        tender_input = driver.find_element(By.ID, "tenderId")
-        tender_input.clear()
-        tender_input.send_keys(tender_id)
-        st.success(f"✅ TENDER ID CONFIGURED: {tender_id}")
-
-        # Click Processing Tab
-        driver.find_element(By.ID, "processingTab").click()
-        time.sleep(3)
-        st.success("✅ PROCESSING TAB ACTIVATED")
-
-        # Open Dashboard
-        dashboard_xpath = f"//a[@href='/officer/TenderDashboard.jsp?tenderid={tender_id}']"
-        driver.find_element(By.XPATH, dashboard_xpath).click()
-        time.sleep(3)
-        st.success("✅ DASHBOARD MODULE LOADED")
-
-        # Open Evaluation Committee
-        driver.find_element(By.XPATH, f"//a[contains(@href,'/officer/EvalComm.jsp?tenderid={tender_id}')]").click()
-        time.sleep(3)
-        st.success("✅ EVALUATION MODULE INITIALIZED")
-
-        # Click Clarification Tab
-        driver.find_element(By.ID, "tbClari").click()
-        time.sleep(3)
+        # INITIAL NAVIGATION: Navigate to Clarification tab to get tenderer list
+        st.info("🔄 INITIAL NAVIGATION TO CLARIFICATION PAGE...")
+        if not navigate_to_clarification(driver, tender_id):
+            raise Exception("Failed to navigate to Clarification page")
+        
         st.success("✅ CLARIFICATION INTERFACE ACTIVE")
-
-        st.subheader("📊 PROCESSING TENDERERS")
+        st.subheader("📊 EXTRACTING TENDERER LIST")
         
         # Find the tenderers table
         tables = driver.find_elements(By.CSS_SELECTOR, "table.tableList_1")
@@ -199,32 +218,21 @@ def run_automation(email, password, tender_id, remark_text):
             st.error("❌ TENDERERS TABLE NOT FOUND IN SYSTEM")
             raise Exception("Tenderers table not found")
         
-        # Get all tenderer rows and extract their info
+        # Extract all tenderer names (2nd column)
         tenderer_rows = target_table.find_elements(By.XPATH, ".//tr[position()>1 and td]")
         total_tenderers = len(tenderer_rows)
-        st.info(f"🎯 DETECTED {total_tenderers} TENDERERS FOR PROCESSING")
         
-        # Extract tenderer data (name and evaluation link) before opening windows
-        tenderers_data = []
+        tenderer_names = []
         for idx, row in enumerate(tenderer_rows):
             try:
                 tenderer_name = row.find_element(By.XPATH, ".//td[2]").text.strip()
-                eval_link_element = row.find_element(By.XPATH, ".//td[4]//a[contains(text(),'Evaluate Tenderer')]")
-                eval_link_url = eval_link_element.get_attribute('href')
-                
-                tenderers_data.append({
-                    'index': idx + 1,
-                    'name': tenderer_name,
-                    'url': eval_link_url
-                })
+                tenderer_names.append(tenderer_name)
                 st.info(f"📋 Tenderer #{idx+1}: {tenderer_name}")
             except Exception as e:
-                st.warning(f"⚠️ Could not extract data for tenderer #{idx+1}: {str(e)}")
+                tenderer_names.append(f"TENDERER #{idx+1}")
+                st.warning(f"⚠️ Could not extract name for tenderer #{idx+1}: {str(e)}")
         
-        st.info(f"✅ EXTRACTED DATA FOR {len(tenderers_data)} TENDERERS")
-        
-        # Store the main window handle
-        main_window = driver.current_window_handle
+        st.success(f"🎯 DETECTED {total_tenderers} TENDERERS FOR PROCESSING")
         
         progress_bar = st.progress(0)
         status_text = st.empty()
@@ -232,62 +240,83 @@ def run_automation(email, password, tender_id, remark_text):
         successful_tenderers = 0
         failed_tenderers = 0
         
-        # Process each tenderer in a new window
-        for tenderer_data in tenderers_data:
-            idx = tenderer_data['index']
-            tenderer_name = tenderer_data['name']
-            eval_url = tenderer_data['url']
-            
+        # Process each tenderer
+        for idx, tenderer_name in enumerate(tenderer_names):
             try:
-                progress_bar.progress(idx / total_tenderers)
-                status_text.markdown(f"<h5 style='color: #ff0066;'>⚡ PROCESSING: {tenderer_name} ({idx}/{total_tenderers})</h5>", unsafe_allow_html=True)
+                progress_bar.progress((idx + 1) / total_tenderers)
+                status_text.markdown(f"<h5 style='color: #ff0066;'>⚡ PROCESSING: {tenderer_name} ({idx+1}/{total_tenderers})</h5>", unsafe_allow_html=True)
                 
-                # Open evaluation page in a new window
-                st.info(f"🪟 OPENING NEW WINDOW FOR: {tenderer_name}")
-                driver.execute_script("window.open('');")
+                # Navigate to Clarification page
+                st.info(f"🔄 NAVIGATING TO CLARIFICATION FOR: {tenderer_name}")
+                if not navigate_to_clarification(driver, tender_id):
+                    st.error(f"❌ FAILED TO NAVIGATE FOR {tenderer_name}")
+                    failed_tenderers += 1
+                    continue
                 
-                # Switch to the new window
-                driver.switch_to.window(driver.window_handles[-1])
+                time.sleep(2)
                 
-                # Navigate to the evaluation page
-                driver.get(eval_url)
-                time.sleep(4)
+                # Find the tenderers table again
+                tables = driver.find_elements(By.CSS_SELECTOR, "table.tableList_1")
+                target_table = None
                 
-                st.info(f"✅ [{idx}/{total_tenderers}] EVALUATION PAGE LOADED: {tenderer_name}")
+                for table in tables:
+                    try:
+                        headers = table.find_elements(By.TAG_NAME, "th")
+                        header_texts = [h.text.strip() for h in headers]
+                        if ("S. No." in header_texts and "List of Tenderers" in header_texts):
+                            target_table = table
+                            break
+                    except:
+                        continue
+                
+                if not target_table:
+                    st.error(f"❌ COULD NOT FIND TENDERERS TABLE FOR {tenderer_name}")
+                    failed_tenderers += 1
+                    continue
+                
+                # Find the specific tenderer row by matching name
+                tenderer_rows = target_table.find_elements(By.XPATH, ".//tr[position()>1 and td]")
+                target_row = None
+                
+                for row in tenderer_rows:
+                    try:
+                        row_name = row.find_element(By.XPATH, ".//td[2]").text.strip()
+                        if row_name == tenderer_name:
+                            target_row = row
+                            break
+                    except:
+                        continue
+                
+                if not target_row:
+                    st.error(f"❌ COULD NOT FIND ROW FOR {tenderer_name}")
+                    failed_tenderers += 1
+                    continue
+                
+                # Click "Evaluate Tenderer" link
+                try:
+                    eval_link = target_row.find_element(By.XPATH, ".//td[4]//a[contains(text(),'Evaluate Tenderer')]")
+                    driver.execute_script("arguments[0].scrollIntoView(true);", eval_link)
+                    time.sleep(0.5)
+                    eval_link.click()
+                    time.sleep(4)
+                    
+                    st.info(f"✅ [{idx+1}/{total_tenderers}] EVALUATION PAGE LOADED: {tenderer_name}")
+                except Exception as link_error:
+                    st.warning(f"⚠️ NO 'EVALUATE TENDERER' LINK FOR {tenderer_name}: {str(link_error)}")
+                    failed_tenderers += 1
+                    continue
                 
                 # Process all forms for this tenderer
                 forms_count = process_tenderer_forms(driver, wait, remark_text, tenderer_name)
                 
-                if forms_count > 0:
+                if forms_count >= 0:  # Count as success even if no forms
                     successful_tenderers += 1
                 else:
-                    successful_tenderers += 1  # Still count as success if no forms to process
-                
-                # Close the current window
-                st.info(f"🔒 CLOSING WINDOW FOR: {tenderer_name}")
-                driver.close()
-                
-                # Switch back to the main window (Clarification page)
-                driver.switch_to.window(main_window)
-                st.info("✅ RETURNED TO MAIN CLARIFICATION PAGE")
-                time.sleep(1)
+                    failed_tenderers += 1
                 
             except Exception as tenderer_error:
                 st.error(f"❌ ERROR PROCESSING {tenderer_name}: {str(tenderer_error)}")
                 failed_tenderers += 1
-                
-                # Try to close any extra windows and return to main window
-                try:
-                    current_windows = driver.window_handles
-                    for window in current_windows:
-                        if window != main_window:
-                            driver.switch_to.window(window)
-                            driver.close()
-                    driver.switch_to.window(main_window)
-                    st.info("🔄 RECOVERED TO MAIN WINDOW")
-                except:
-                    st.warning("⚠️ COULD NOT RECOVER TO MAIN WINDOW")
-                
                 continue
         
         progress_bar.progress(1.0)
