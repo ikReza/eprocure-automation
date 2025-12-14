@@ -26,19 +26,13 @@ if check_password():
     with col1:
         email = st.text_input("📧 EMAIL ADDRESS")
         tender_id = st.text_input("🆔 TENDER ID")
-        remark_text = st.text_input("💬 EVALUATION REMARK", value="Accept")
     
     with col2:
         password = st.text_input("🔑 PASSWORD", type="password")
-        skip_first = st.number_input(
-            "⏭️ SKIP FIRST N TENDERERS", 
-            min_value=0, 
-            value=0, 
-            step=1,
-            help="If you've already processed some tenderers, enter the number to skip. Example: Enter 20 to start from tenderer #21."
-        )
+        remark_text = st.text_input("💬 EVALUATION REMARK", value="Accept")
 
-    st.info("💡 **TIP:** If automation fails or stops, note the last processed tenderer number, then restart and use 'Skip First N Tenderers' to resume from where you left off.")
+    # Skip option
+    start_from = st.number_input("⏭️ SKIP FIRST N TENDERERS (Optional)", min_value=0, value=0, step=1)
 
     # Center the button
     col1, col2, col3 = st.columns([1, 1, 1])
@@ -50,7 +44,29 @@ if check_password():
             st.warning("⚠️ ALL FIELDS REQUIRED FOR SYSTEM INITIALIZATION")
         else:
             st.info("🔄 INITIALIZING AUTOMATION SEQUENCE...")
-            run_automation(email, password, tender_id, remark_text, start_from=skip_first)
+            run_automation(email, password, tender_id, remark_text, start_from)
+    
+    # Show download button if CSV data exists from previous run
+    if 'csv_data' in st.session_state and len(st.session_state.csv_data) > 1:
+        st.divider()
+        st.subheader("📥 PREVIOUS RUN DATA")
+        
+        import csv
+        import io
+        from datetime import datetime
+        
+        csv_buffer = io.StringIO()
+        writer = csv.writer(csv_buffer)
+        writer.writerows(st.session_state.csv_data)
+        
+        col1, col2, col3 = st.columns([1, 1, 1])
+        with col2:
+            st.download_button(
+                label=f"📥 Download Previous Log ({len(st.session_state.csv_data)-1} entries)",
+                data=csv_buffer.getvalue(),
+                file_name=f"log_{tender_id}_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+                mime="text/csv"
+            )
     
     show_copyright()
 else:

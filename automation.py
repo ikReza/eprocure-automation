@@ -9,6 +9,9 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
 import time
 import os
+import csv
+from datetime import datetime
+import io
 
 # --- Chrome Driver Setup ---
 def get_chrome_driver():
@@ -95,7 +98,7 @@ def navigate_to_clarification(driver, tender_id):
         st.error(f"❌ NAVIGATION ERROR: {str(e)}")
         return False
 
-def process_tenderer_forms(driver, wait, remark_text, tenderer_name):
+def process_tenderer_forms(driver, wait, remark_text, tenderer_name, status_text, current_num=None, total_num=None):
     """Process all forms for a specific tenderer that have 'Evaluate Form' action"""
     forms_processed = 0
     forms_skipped = 0
@@ -131,14 +134,25 @@ def process_tenderer_forms(driver, wait, remark_text, tenderer_name):
                             except:
                                 form_name = "FORM"
                             
+                            forms_processed += 1
+                            
+                            # Update status with current form being processed
+                            if current_num and total_num:
+                                status_text.markdown(
+                                    f"<h5 style='color: #ff0066;'>🔹 [{current_num}/{total_num}] FORM #{forms_processed}: {form_name[:40]}...</h5>", 
+                                    unsafe_allow_html=True
+                                )
+                            else:
+                                status_text.markdown(
+                                    f"<h5 style='color: #ff0066;'>🔹 FORM #{forms_processed}: {form_name[:50]}...</h5>", 
+                                    unsafe_allow_html=True
+                                )
+                            
                             # Click the evaluate form link
                             driver.execute_script("arguments[0].scrollIntoView(true);", eval_form_link)
                             time.sleep(0.5)
                             eval_form_link.click()
                             time.sleep(3)
-                            
-                            forms_processed += 1
-                            st.info(f"   🔹 EXECUTING FORM: {form_name}")
                             
                             # Fill out and submit the form
                             accept_radio = wait.until(EC.element_to_be_clickable((By.ID, "techQualify")))
@@ -161,11 +175,10 @@ def process_tenderer_forms(driver, wait, remark_text, tenderer_name):
                                 alert = driver.switch_to.alert
                                 alert_text = alert.text
                                 alert.accept()
-                                st.info(f"   ℹ️ SYSTEM ALERT: {alert_text}")
                             except:
                                 pass
                             
-                            st.success(f"   ✅ FORM SUBMITTED: {form_name}")
+                            st.success(f"   ✅ FORM #{forms_processed} SUBMITTED: {form_name[:60]}")
                             
                             # Wait for the page to automatically navigate back
                             time.sleep(3)
@@ -182,9 +195,9 @@ def process_tenderer_forms(driver, wait, remark_text, tenderer_name):
                 # If no pending forms found, we're done
                 if not found_pending:
                     if forms_processed > 0:
-                        st.info(f"✅ ALL PENDING FORMS PROCESSED FOR {tenderer_name}. Processed: {forms_processed}, Already Evaluated: {forms_skipped}")
+                        st.info(f"✅ COMPLETED {tenderer_name}: {forms_processed} forms processed, {forms_skipped} already evaluated")
                     else:
-                        st.info(f"ℹ️ NO PENDING FORMS FOR {tenderer_name}. All {forms_skipped} forms already evaluated.")
+                        st.info(f"ℹ️ {tenderer_name}: All {forms_skipped} forms already evaluated")
                     break
                     
             except Exception as inner_error:
@@ -196,25 +209,15 @@ def process_tenderer_forms(driver, wait, remark_text, tenderer_name):
     
     return forms_processed
 
-def go_back_to_dashboard(driver, wait):
-    """Click 'Go back to Dashboard' button to return to Clarification page"""
-    try:
-        # Find and click the "Go back to Dashboard" button
-        go_back_button = wait.until(EC.element_to_be_clickable((By.CLASS_NAME, "action-button-goback")))
-        driver.execute_script("arguments[0].scrollIntoView(true);", go_back_button)
-        time.sleep(0.5)
-        go_back_button.click()
-        time.sleep(3)
-        st.success("🔙 RETURNED TO CLARIFICATION DASHBOARD")
-        return True
-    except Exception as e:
-        st.warning(f"⚠️ COULD NOT FIND 'GO BACK TO DASHBOARD' BUTTON: {str(e)}")
-        return False
-
 def run_automation(email, password, tender_id, remark_text, start_from=0):
     """Main automation function"""
     driver = None
+    csv_data = []
+    
     try:
+        # CSV Headers
+        csv_data.append(['Timestamp', 'Tenderer_Num', 'Tenderer_Name', 'Status', 'Forms_Count', 'Error'])
+        
         # Initialize Chrome driver
         driver = get_chrome_driver()
         wait = WebDriverWait(driver, 10)
@@ -277,56 +280,77 @@ def run_automation(email, password, tender_id, remark_text, start_from=0):
                 return
             st.warning(f"⏭️ SKIPPING FIRST {start_from} TENDERERS - STARTING FROM TENDERER #{start_from + 1}")
         
-        st.info("🚀 OPTIMIZED MODE: Using 'Go back to Dashboard' for faster processing")
+        # Collect all tenderer info upfront
+        st.info("📋 Collecting tenderer information...")
+        tenderer_info = []
+        for idx in range(start_from, total_tenderers):
+            try:
+                row = tenderer_rows[idx]
+                name = row.find_element(By.XPATH, ".//td[2]").text.strip()
+                tenderer_info.append((idx + 1, name))
+            except:
+                tenderer_info.append((idx + 1, f"TENDERER_{idx + 1}"))
         
-        progress_bar = st.progress(0)
-        status_text = st.empty()
+        st.success(f"✅ Collected {len(tenderer_info)} tenderers")
+        
+        # Sidebar for progress and download
+        with st.sidebar:
+            st.subheader("📊 PROGRESS")
+            sidebar_progress = st.progress(0)
+            sidebar_status = st.empty()
+            st.divider()
+            st.subheader("💾 DOWNLOAD LOG")
+            st.info("⚠️ Download will be available after automation completes")
+            download_placeholder = st.empty()
+        
+        # Main area for logs (newest at top)
+        log_container = st.empty()
+        log_messages = []
+        
+        def update_logs():
+            """Update log display with current messages"""
+            log_html = ""
+            for msg in log_messages[:30]:  # Show last 30 messages
+                if "❌" in msg or "FAILED" in msg:
+                    color = "#ff0066"
+                elif "✅" in msg or "COMPLETED" in msg:
+                    color = "#00ff88"
+                else:
+                    color = "#00ffff"
+                log_html += f"<p style='color: {color}; font-size: 14px; margin: 2px 0;'>{msg}</p>"
+            log_container.markdown(log_html, unsafe_allow_html=True)
         
         successful_tenderers = 0
         failed_tenderers = 0
         skipped_tenderers = start_from
         
-        # Process each tenderer by index, starting from start_from
-        for idx in range(start_from, total_tenderers):
+        # Store original window handle
+        original_window = driver.current_window_handle
+        
+        # Process each tenderer by opening in new duplicated tab
+        for i, (tenderer_num, tenderer_name) in enumerate(tenderer_info):
             try:
-                current_tenderer_num = idx + 1
-                progress_bar.progress((idx - start_from + 1) / (total_tenderers - start_from))
-                status_text.markdown(f"<h5 style='color: #ff0066;'>⚡ PROCESSING TENDERER #{current_tenderer_num}/{total_tenderers}</h5>", unsafe_allow_html=True)
+                # Update sidebar progress
+                sidebar_progress.progress((i + 1) / len(tenderer_info))
+                sidebar_status.markdown(f"**#{tenderer_num}/{total_tenderers}**")
                 
-                # For the first tenderer (or after skip), we're already on the Clarification page
-                # For subsequent tenderers, use "Go back to Dashboard" button
-                if idx > start_from:
-                    st.info(f"🔙 RETURNING TO CLARIFICATION DASHBOARD...")
-                    
-                    # Try to use "Go back to Dashboard" button first
-                    if not go_back_to_dashboard(driver, wait):
-                        # If button doesn't work, fall back to full navigation
-                        st.warning("⚠️ FALLBACK: USING FULL NAVIGATION")
-                        max_nav_retries = 3
-                        nav_success = False
-                        for nav_attempt in range(max_nav_retries):
-                            if navigate_to_clarification(driver, tender_id):
-                                nav_success = True
-                                break
-                            else:
-                                if nav_attempt < max_nav_retries - 1:
-                                    st.warning(f"⚠️ NAVIGATION ATTEMPT {nav_attempt + 1} FAILED, RETRYING...")
-                                    time.sleep(3)
-                                else:
-                                    st.error(f"❌ NAVIGATION FAILED AFTER {max_nav_retries} ATTEMPTS")
-                        
-                        if not nav_success:
-                            st.error(f"❌ FAILED TO NAVIGATE FOR TENDERER #{current_tenderer_num}")
-                            failed_tenderers += 1
-                            continue
-                    
-                    time.sleep(2)
-                else:
-                    # First tenderer - already on Clarification page from initial navigation
-                    st.info(f"⚡ PROCESSING FIRST TENDERER - ALREADY ON CLARIFICATION PAGE")
-                    time.sleep(1)
+                # Add to top of log messages
+                log_messages.insert(0, f"⚡ PROCESSING #{tenderer_num}/{total_tenderers}: {tenderer_name[:50]}")
+                update_logs()
                 
-                # Find the tenderers table again
+                # Duplicate current tab
+                log_messages.insert(0, f"📑 Opening new tab for: {tenderer_name[:50]}")
+                update_logs()
+                
+                driver.execute_script("window.open(arguments[0]);", driver.current_url)
+                time.sleep(2)
+                
+                # Switch to new tab
+                new_window = [w for w in driver.window_handles if w != original_window][0]
+                driver.switch_to.window(new_window)
+                time.sleep(2)
+                
+                # Find tenderer table in new tab
                 tables = driver.find_elements(By.CSS_SELECTOR, "table.tableList_1")
                 target_table = None
                 
@@ -341,73 +365,112 @@ def run_automation(email, password, tender_id, remark_text, start_from=0):
                         continue
                 
                 if not target_table:
-                    st.error(f"❌ COULD NOT FIND TENDERERS TABLE FOR TENDERER #{current_tenderer_num}")
-                    failed_tenderers += 1
-                    continue
+                    raise Exception("Table not found in new tab")
                 
-                # Get the specific tenderer row by index
-                tenderer_rows = target_table.find_elements(By.XPATH, ".//tr[position()>1 and td]")
+                # Find the specific tenderer row by name
+                tenderer_rows_new = target_table.find_elements(By.XPATH, ".//tr[position()>1 and td]")
+                target_row = None
                 
-                if idx >= len(tenderer_rows):
-                    st.error(f"❌ TENDERER #{current_tenderer_num} NOT FOUND IN TABLE")
-                    failed_tenderers += 1
-                    continue
-                
-                target_row = tenderer_rows[idx]
-                
-                # Get tenderer name for logging
-                try:
-                    tenderer_name = target_row.find_element(By.XPATH, ".//td[2]").text.strip()
-                except:
-                    tenderer_name = f"TENDERER #{current_tenderer_num}"
-                
-                st.info(f"📋 Processing: {tenderer_name}")
-                
-                # Check Action column (4th column) - look for "Evaluate Tenderer" or "Edit"
-                try:
-                    action_cell = target_row.find_element(By.XPATH, ".//td[4]")
-                    
-                    # Try to find "Evaluate Tenderer" link first
+                for row in tenderer_rows_new:
                     try:
-                        eval_link = action_cell.find_element(By.XPATH, ".//a[contains(text(),'Evaluate Tenderer')]")
-                        st.info(f"✅ FOUND 'EVALUATE TENDERER' LINK FOR {tenderer_name}")
-                        driver.execute_script("arguments[0].scrollIntoView(true);", eval_link)
-                        time.sleep(0.5)
-                        eval_link.click()
-                        time.sleep(4)
-                        st.info(f"✅ EVALUATION PAGE LOADED: {tenderer_name}")
+                        name_cell = row.find_element(By.XPATH, ".//td[2]")
+                        if name_cell.text.strip() == tenderer_name:
+                            target_row = row
+                            break
                     except:
-                        # If "Evaluate Tenderer" not found, look for "Edit" link
-                        try:
-                            edit_link = action_cell.find_element(By.XPATH, ".//a[contains(text(),'Edit')]")
-                            st.info(f"✅ FOUND 'EDIT' LINK FOR {tenderer_name} (Already Evaluated)")
-                            driver.execute_script("arguments[0].scrollIntoView(true);", edit_link)
-                            time.sleep(0.5)
-                            edit_link.click()
-                            time.sleep(4)
-                            st.info(f"✅ EDIT PAGE LOADED: {tenderer_name}")
-                        except:
-                            st.error(f"❌ NO 'EVALUATE TENDERER' OR 'EDIT' LINK FOUND FOR {tenderer_name}")
-                            failed_tenderers += 1
-                            continue
-                    
-                except Exception as link_error:
-                    st.error(f"❌ ERROR ACCESSING ACTION CELL FOR {tenderer_name}: {str(link_error)}")
-                    failed_tenderers += 1
-                    continue
+                        continue
                 
-                # Process all forms for this tenderer
-                forms_count = process_tenderer_forms(driver, wait, remark_text, tenderer_name)
+                if not target_row:
+                    raise Exception("Tenderer not found in new tab")
+                
+                # Click action link
+                action_cell = target_row.find_element(By.XPATH, ".//td[4]")
+                
+                try:
+                    eval_link = action_cell.find_element(By.XPATH, ".//a[contains(text(),'Evaluate Tenderer')]")
+                    log_messages.insert(0, f"✅ FOUND 'EVALUATE TENDERER' LINK")
+                    update_logs()
+                    driver.execute_script("arguments[0].scrollIntoView(true);", eval_link)
+                    time.sleep(0.5)
+                    eval_link.click()
+                    time.sleep(4)
+                except:
+                    try:
+                        edit_link = action_cell.find_element(By.XPATH, ".//a[contains(text(),'Edit')]")
+                        log_messages.insert(0, f"✅ FOUND 'EDIT' LINK (Already Evaluated)")
+                        update_logs()
+                        driver.execute_script("arguments[0].scrollIntoView(true);", edit_link)
+                        time.sleep(0.5)
+                        edit_link.click()
+                        time.sleep(4)
+                    except:
+                        raise Exception("No action link found")
+                
+                # Process forms
+                status_text = st.empty()  # Dummy for compatibility
+                forms_count = process_tenderer_forms(driver, wait, remark_text, tenderer_name, status_text, tenderer_num, total_tenderers)
+                
+                # Log to CSV
+                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                csv_data.append([timestamp, tenderer_num, tenderer_name, "SUCCESS", forms_count, ""])
+                
+                # Close new tab and switch back to original
+                driver.close()
+                driver.switch_to.window(original_window)
+                time.sleep(1)
+                
+                log_messages.insert(0, f"✅ COMPLETED: {tenderer_name[:50]} ({forms_count} forms)")
+                update_logs()
                 
                 successful_tenderers += 1
                 
+                # Update CSV data in session state to avoid rerun issues
+                if 'csv_data' not in st.session_state:
+                    st.session_state.csv_data = []
+                st.session_state.csv_data = csv_data
+                
             except Exception as tenderer_error:
-                st.error(f"❌ ERROR PROCESSING TENDERER #{current_tenderer_num}: {str(tenderer_error)}")
+                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                csv_data.append([timestamp, tenderer_num, tenderer_name, "FAILED", 0, str(tenderer_error)])
+                
+                log_messages.insert(0, f"❌ FAILED: {tenderer_name[:50]} - {str(tenderer_error)[:30]}")
+                update_logs()
+                
+                # Update CSV data in session state
+                if 'csv_data' not in st.session_state:
+                    st.session_state.csv_data = []
+                st.session_state.csv_data = csv_data
+                
+                # Make sure we're back on original window
+                try:
+                    driver.close()
+                except:
+                    pass
+                try:
+                    driver.switch_to.window(original_window)
+                except:
+                    pass
+                
                 failed_tenderers += 1
                 continue
         
-        progress_bar.progress(1.0)
-        status_text.markdown("<h5 style='color: #ff0066;'>✅ PROCESSING SEQUENCE COMPLETE</h5>", unsafe_allow_html=True)
+        # Store final CSV data
+        st.session_state.csv_data = csv_data
+        
+        sidebar_progress.progress(1.0)
+        sidebar_status.markdown("**✅ COMPLETE**")
+        
+        # Now show download button (won't cause rerun since automation is done)
+        csv_buffer = io.StringIO()
+        writer = csv.writer(csv_buffer)
+        writer.writerows(csv_data)
+        
+        download_placeholder.download_button(
+            label=f"📥 Download Log ({len(csv_data)-1} entries)",
+            data=csv_buffer.getvalue(),
+            file_name=f"log_{tender_id}_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+            mime="text/csv"
+        )
         
         st.success("🎯 AUTOMATION SUCCESSFULLY EXECUTED")
         st.markdown(f"""
